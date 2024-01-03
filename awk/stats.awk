@@ -23,11 +23,11 @@ BEGIN {
     n_transfers += 1
     sum_transfers += $1
 
-    if ( max_transfer > $1 ) {
+    if ( max_transfer < $1 ) {
         max_transfer = $1
     }
 
-    if ( min_transfer < $1 ) {
+    if ( min_transfer > $1 ) {
         min_transfer = $1
     }
 }
