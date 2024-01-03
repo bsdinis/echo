@@ -38,10 +38,10 @@ struct Args {
 async fn do_run(
     mut client: EchoerClient<Channel>,
     request: tonic::Request<EchoRequest>,
-) -> anyhow::Result<usize> {
+) -> anyhow::Result<f64> {
     let start = tokio::time::Instant::now();
     let _reply = client.echo(request).await?;
-    Ok(start.elapsed().as_micros() as usize)
+    Ok(start.elapsed().as_secs_f64() * 1_000_000f64)
 }
 
 async fn run(args: Args) -> anyhow::Result<()> {
@@ -56,18 +56,25 @@ async fn run(args: Args) -> anyhow::Result<()> {
         .map(|_| do_run(client.clone(), tonic::Request::new(request.clone())))
         .collect::<Vec<_>>();
 
+    let start = tokio::time::Instant::now();
     let results = futures::future::join_all(futs)
         .await
         .into_iter()
         .collect::<anyhow::Result<Vec<_>>>()?;
+    let elapsed = start.elapsed();
+    let n_results = results.len();
 
     println!(
         "{}",
         results
             .into_iter()
-            .map(|x| format!("{}us", x))
+            .map(|x| format!("{:.3}", x))
             .collect::<Vec<_>>()
             .join("\n")
+    );
+    println!(
+        "Throughput: {:.3}",
+        (n_results * args.message_size) as f64 / elapsed.as_secs_f64()
     );
     Ok(())
 }
