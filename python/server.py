@@ -64,6 +64,7 @@ def server(host, port, n_cores, backlog, verbose):
 
     addr = (host, port)
     s = socket.create_server(addr, backlog=backlog)
+    logging.info('Server started, listening @ {}:{}'.format(*addr))
     queue = multiprocessing.Queue()
     workers = [
         multiprocessing.Process(

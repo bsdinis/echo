@@ -46,14 +46,13 @@ def run_client(host, port, message_size):
 
     end_time = time.perf_counter()
     server.close()
-    return end_time - start_time
+    print('{:.3f}'.format(10**6 * (end_time - start_time)))
 
 
-def run_worker(host, port, message_size, queue, reps):
+def run_worker(host, port, message_size, reps):
     for _ in range(reps):
         try:
-            elapsed = run_client(host, port, message_size)
-            queue.put(elapsed)
+            run_client(host, port, message_size)
         except BaseException:
             logging.exception(
                 'failed to run client workload @ {}:{}'.format(host, port))
@@ -80,15 +79,14 @@ def client(host, port, n_cores, reps, message_size, verbose):
     else:
         logging.getLogger().setLevel(logging.INFO)
 
-    queue = multiprocessing.Queue(reps)
     workers = [
         multiprocessing.Process(
             target=run_worker, args=(
-                host, port, message_size, queue, reps // n_cores)) for _ in range(
+                host, port, message_size, reps // n_cores)) for _ in range(
             n_cores - 1)] + [
         multiprocessing.Process(
             target=run_worker, args=(
-                host, port, message_size, queue, reps // n_cores + reps %
+                host, port, message_size, reps // n_cores + reps %
                 n_cores))]
 
     start_time = time.perf_counter()
@@ -98,12 +96,8 @@ def client(host, port, n_cores, reps, message_size, verbose):
         w.join()
     end_time = time.perf_counter()
 
-    elapsed = list()
-    while queue.empty() == False:
-        elapsed.append(queue.get())
-    print('\n'.join('{:.3f}'.format(10**6 * e) for e in elapsed))
-    print('Throughput: {:.3f}'.format(
-        (len(elapsed) * message_size) / (end_time - start_time)))
+    print('Elapsed: {:.9f}'.format((end_time - start_time)))
+    print('Message Size: {}'.format(message_size))
 
 
 if __name__ == "__main__":
