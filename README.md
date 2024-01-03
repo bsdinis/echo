@@ -24,4 +24,4 @@ The client should support the following CLI options:
 ## Output
 
 The clients should output a list of latencies in microseconds.
-Moreover, there should be a line with `Throughput: X`, in Bytes/s at the end.
+Moreover, there should be a line with `Elapsed: X.Y`, in seconds and a line with `Message Size: Z`, in bytes.

@@ -2,12 +2,15 @@
 
 BEGIN {
     n_transfers=0
-    throughput=0
     sum_transfers=0
 }
 
-/Throughput/ {
-    throughput=$2
+/Elapsed/ {
+    elapsed=$2
+}
+
+/Message Size/ {
+    message_size=$3
 }
 
 /^[0-9]/ {
@@ -45,5 +48,5 @@ END {
     printf "Average:    %.3f us\n", average
     printf "Stddev:     %.3f us\n", stddev
     printf "Max:        %.3f us\n", max_transfer
-    printf "Throughput: %.3f B/s\n", throughput
+    printf "Throughput: %.3f B/s\n", (n_transfers * message_size) / elapsed
 }
