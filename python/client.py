@@ -12,7 +12,6 @@ BUCKET = b'\x42' * BUCKET_SIZE
 
 
 def run_client(host, port, message_size):
-    message_size = humanfriendly.parse_size(message_size, binary=True)
     encoded_size = message_size.to_bytes(8, 'big')
 
     size_to_send = message_size
@@ -74,6 +73,8 @@ def run_worker(host, port, message_size, queue, reps):
               help="message size in B")
 @click.option("--verbose", '-v', is_flag=True, type=click.BOOL, default=False)
 def client(host, port, n_cores, reps, message_size, verbose):
+    message_size = humanfriendly.parse_size(message_size, binary=True)
+
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
@@ -89,15 +90,20 @@ def client(host, port, n_cores, reps, message_size, verbose):
             target=run_worker, args=(
                 host, port, message_size, queue, reps // n_cores + reps %
                 n_cores))]
+
+    start_time = time.perf_counter()
     for w in workers:
         w.start()
     for w in workers:
         w.join()
+    end_time = time.perf_counter()
 
     elapsed = list()
     while queue.empty() == False:
         elapsed.append(queue.get())
-    print('\n'.join('{:.3f}us'.format(10**6 * e) for e in elapsed))
+    print('\n'.join('{:.3f}'.format(10**6 * e) for e in elapsed))
+    print('Throughput: {:.3f}'.format(
+        (len(elapsed) * message_size) / (end_time - start_time)))
 
 
 if __name__ == "__main__":
