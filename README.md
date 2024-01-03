@@ -21,4 +21,7 @@ The client should support the following CLI options:
 - `-r`, `--reps`: integer, number of requests to send in total (default: 1000)
 - `-s`, `--message-size`: size of the message to send (parseable, like `1MB` or `256KiB`)
 
+## Output
 
+The clients should output a list of latencies in microseconds.
+Moreover, there should be a line with `Throughput: X`, in Bytes/s at the end.
