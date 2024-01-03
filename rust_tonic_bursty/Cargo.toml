@@ -1,5 +1,5 @@
 [package]
-name = "rust_tonic"
+name = "rust_tonic_bursty"
 version = "0.1.0"
 edition = "2021"
 
