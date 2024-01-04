@@ -14,7 +14,7 @@ struct Args {
     #[arg(default_value = "[::1]")]
     host: String,
 
-    #[arg(default_value_t = 9095, value_parser = clap::value_parser!(u16).range(1..))]
+    #[arg(default_value_t = 9091, value_parser = clap::value_parser!(u16).range(1..))]
     port: u16,
 
     #[arg(short = 'j', long)]
