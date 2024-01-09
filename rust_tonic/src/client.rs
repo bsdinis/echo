@@ -158,7 +158,9 @@ async fn run(args: Args) -> anyhow::Result<()> {
 }
 
 fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .finish();
     let args = Args::parse();
 
     let rt = if let Some(n_cores) = args.n_cores {

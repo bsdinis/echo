@@ -56,7 +56,9 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .finish();
     let args = Args::parse();
 
     let rt = if let Some(n_cores) = args.n_cores {
