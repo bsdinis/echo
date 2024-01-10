@@ -159,6 +159,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
 
 fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::filter::EnvFilter::from_default_env())
         .with_writer(std::io::stderr)
         .finish();
     let args = Args::parse();

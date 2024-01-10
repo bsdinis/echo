@@ -55,7 +55,7 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> anyhow::Result<()>> {
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .finish();
