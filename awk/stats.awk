@@ -3,13 +3,17 @@
 BEGIN {
     n_transfers=0
     sum_transfers=0
+    elapsed_sum=0
+    total_clients=0
 }
 
 /Elapsed/ {
-    elapsed=$2
+    elapsed_sum += $2
+    total_clients += 1
 }
 
 /Message Size/ {
+    # TODO: check that message sizes are consistent
     message_size=$3
 }
 
@@ -42,6 +46,10 @@ END {
     }
 
     stddev = sqrt(variance)
+
+    # we average the elapsed times
+    # TODO: handle warmup and cooldown
+    elapsed = elapsed_sum / total_clients
 
     printf "N:          %d\n", n_transfers
     printf "Min:        %.3f us\n", min_transfer

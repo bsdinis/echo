@@ -1,15 +1,18 @@
 #!/usr/bin/env python
 
 import click
+import datetime
 import grpc
 import humanfriendly
 import logging
 import multiprocessing
+import pause
 import time
 
 
 import echo_pb2_grpc
 import echo_pb2
+
 
 def run_client(host, port, message_size):
     logging.debug("trying to connect to {}:{}".format(host, port))
@@ -22,6 +25,7 @@ def run_client(host, port, message_size):
 
     logging.debug("connected to {}:{}".format(host, port))
     print('{:.3f}'.format(10**6 * (end_time - start_time)))
+
 
 def run_worker(host, port, message_size, reps):
     for _ in range(reps):
@@ -44,9 +48,14 @@ def run_worker(host, port, message_size, reps):
               show_default=True,
               type=click.STRING,
               help="message size in B")
+@click.option("--start",
+              type=click.DateTime(formats=["%H:%M:%S"]),
+              default=datetime.datetime.fromtimestamp(time.time()).strftime('%H:%M:%S'))
 @click.option("--verbose", '-v', is_flag=True, type=click.BOOL, default=False)
-def client(host, port, n_cores, reps, message_size, verbose):
+def client(host, port, n_cores, reps, message_size, start, verbose):
     message_size = humanfriendly.parse_size(message_size, binary=True)
+    today = datetime.date.today()
+    start = start.replace(year=today.year, month=today.month, day=today.day)
 
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
@@ -56,13 +65,14 @@ def client(host, port, n_cores, reps, message_size, verbose):
     workers = [
         multiprocessing.Process(
             target=run_worker, args=(
-                host, port, message_size,reps // n_cores)) for _ in range(
+                host, port, message_size, reps // n_cores)) for _ in range(
             n_cores - 1)] + [
         multiprocessing.Process(
             target=run_worker, args=(
-                host, port, message_size,reps // n_cores + reps %
+                host, port, message_size, reps // n_cores + reps %
                 n_cores))]
 
+    pause.until(start)
     start_time = time.perf_counter()
     for w in workers:
         w.start()

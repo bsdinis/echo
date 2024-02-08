@@ -1,20 +1,27 @@
-use clap::Parser;
+use std::sync::Arc;
 
+use anyhow::Context;
+use chrono::{Local, NaiveDateTime, NaiveTime};
+use clap::Parser;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
 
-use anyhow::Context;
-use std::sync::Arc;
-
 const BUFFER_SIZE: usize = 1 << 16;
 
-fn size_parser(s: &str) -> Result<usize, anyhow::Error> {
+fn size_parser(s: &str) -> anyhow::Result<usize> {
     parse_size::Config::new()
         .with_binary()
         .parse_size(s)
         .map(|x| x as usize)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {:?}", s, e))
+}
+
+fn time_parser(s: &str) -> anyhow::Result<NaiveDateTime> {
+    let today = Local::now().date_naive();
+    let time =
+        NaiveTime::parse_from_str(s, "%H:%M:%S").context("failed to parse start timestamp")?;
+    Ok(NaiveDateTime::new(today, time))
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -41,6 +48,9 @@ struct Args {
 
     #[arg(short = 's', long, default_value_t = 1, value_parser = size_parser)]
     message_size: usize,
+
+    #[arg(long, value_parser = time_parser)]
+    start: Option<NaiveDateTime>,
 
     #[arg(short, long)]
     client_type: ClientType,
@@ -202,5 +212,12 @@ fn main() -> anyhow::Result<()> {
             .unwrap()
     };
 
+    if let Some(start) = args.start {
+        let now_ts = Local::now().timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        let start_ts = start.timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        if now_ts < start_ts {
+            std::thread::sleep(std::time::Duration::from_nanos((start_ts - now_ts) as u64));
+        }
+    }
     rt.block_on(run(args))
 }

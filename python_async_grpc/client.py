@@ -1,14 +1,15 @@
 #!/usr/bin/env python
 
+import asyncio
 import click
+import datetime
+import grpc
 import humanfriendly
 import logging
 import multiprocessing
+import pause
 import time
 
-
-import asyncio
-import grpc
 import echo_pb2_grpc
 import echo_pb2
 
@@ -25,7 +26,7 @@ async def run_client(host, port, stub, message_size):
             'failed to run client workload @ {}:{}'.format(host, port))
 
 
-async def run(host, port, n_cores, reps, message_size):
+async def run(host, port, n_cores, reps, message_size, start):
     async with grpc.aio.insecure_channel("{}:{}".format(host, port)) as channel:
         stub = echo_pb2_grpc.EchoerStub(channel)
         start_time = time.perf_counter()
@@ -48,15 +49,21 @@ async def run(host, port, n_cores, reps, message_size):
               show_default=True,
               type=click.STRING,
               help="message size in B")
+@click.option("--start",
+              type=click.DateTime(formats=["%H:%M:%S"]),
+              default=datetime.datetime.fromtimestamp(time.time()).strftime('%H:%M:%S'))
 @click.option("--verbose", '-v', is_flag=True, type=click.BOOL, default=False)
-def client(host, port, n_cores, reps, message_size, verbose):
+def client(host, port, n_cores, reps, message_size, start, verbose):
     message_size = humanfriendly.parse_size(message_size, binary=True)
+    today = datetime.date.today()
+    start = start.replace(year=today.year, month=today.month, day=today.day)
 
     if verbose:
         logging.getLogger().setLevel(logging.DEBUG)
     else:
         logging.getLogger().setLevel(logging.INFO)
 
+    pause.until(start)
     asyncio.run(run(host, port, n_cores, reps, message_size))
 
 

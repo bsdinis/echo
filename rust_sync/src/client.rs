@@ -1,19 +1,26 @@
-use clap::Parser;
 use std::io::{Read, Write};
 use std::net::TcpStream;
-
 use std::thread;
 
 use anyhow::Context;
+use chrono::{Local, NaiveDateTime, NaiveTime};
+use clap::Parser;
 
 const BUFFER_SIZE: usize = 1 << 16;
 
-fn size_parser(s: &str) -> Result<usize, anyhow::Error> {
+fn size_parser(s: &str) -> anyhow::Result<usize> {
     parse_size::Config::new()
         .with_binary()
         .parse_size(s)
         .map(|x| x as usize)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {:?}", s, e))
+}
+
+fn time_parser(s: &str) -> anyhow::Result<NaiveDateTime> {
+    let today = Local::now().date_naive();
+    let time =
+        NaiveTime::parse_from_str(s, "%H:%M:%S").context("failed to parse start timestamp")?;
+    Ok(NaiveDateTime::new(today, time))
 }
 
 #[derive(Parser, Clone)]
@@ -33,6 +40,9 @@ struct Args {
 
     #[arg(short = 's', long, default_value_t = 1, value_parser = size_parser)]
     message_size: usize,
+
+    #[arg(long, value_parser = time_parser)]
+    start: Option<NaiveDateTime>,
 }
 
 fn do_run(stream: &mut TcpStream, message_size: usize) -> anyhow::Result<()> {
@@ -82,6 +92,15 @@ fn main() -> anyhow::Result<()> {
 
     let paralellism = args.n_cores.unwrap_or_else(|| num_cpus::get());
 
+    if let Some(start) = args.start {
+        let now_ts = Local::now().timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        let start_ts = start.timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        if now_ts < start_ts {
+            std::thread::sleep(std::time::Duration::from_nanos((start_ts - now_ts) as u64));
+        }
+    }
+
+    let start = std::time::Instant::now();
     let runners = (0..paralellism)
         .into_iter()
         .map(|idx| {
@@ -94,7 +113,7 @@ fn main() -> anyhow::Result<()> {
         .map(|reps| (args.clone(), reps))
         .map(|(args, reps)| thread::spawn(move || closed_client(args, reps)))
         .collect::<Vec<_>>();
-    let start = std::time::Instant::now();
+
     runners
         .into_iter()
         .filter_map(|x| match x.join() {

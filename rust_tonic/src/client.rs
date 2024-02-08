@@ -1,19 +1,27 @@
+use anyhow::Context;
+use chrono::{Local, NaiveDateTime, NaiveTime};
+use clap::Parser;
 use echo::echoer_client::EchoerClient;
 use echo::EchoRequest;
-
-use clap::Parser;
 use tonic::transport::Channel;
 
 pub mod echo {
     tonic::include_proto!("echo");
 }
 
-fn size_parser(s: &str) -> Result<usize, anyhow::Error> {
+fn size_parser(s: &str) -> anyhow::Result<usize> {
     parse_size::Config::new()
         .with_binary()
         .parse_size(s)
         .map(|x| x as usize)
         .map_err(|e| anyhow::anyhow!("failed to parse {}: {:?}", s, e))
+}
+
+fn time_parser(s: &str) -> anyhow::Result<NaiveDateTime> {
+    let today = Local::now().date_naive();
+    let time =
+        NaiveTime::parse_from_str(s, "%H:%M:%S").context("failed to parse start timestamp")?;
+    Ok(NaiveDateTime::new(today, time))
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -40,6 +48,9 @@ struct Args {
 
     #[arg(short = 's', long, default_value_t = 1, value_parser = size_parser)]
     message_size: usize,
+
+    #[arg(long, value_parser = time_parser)]
+    start: Option<NaiveDateTime>,
 
     #[arg(short, long)]
     client_type: ClientType,
@@ -71,6 +82,7 @@ async fn closed_client(args: Args, reps: usize) -> anyhow::Result<()> {
 
 async fn run_closed(args: Args) -> anyhow::Result<()> {
     let paralellism = args.n_cores.unwrap_or_else(|| num_cpus::get());
+    let start = tokio::time::Instant::now();
     let runners = (0..paralellism)
         .into_iter()
         .map(|idx| {
@@ -82,7 +94,6 @@ async fn run_closed(args: Args) -> anyhow::Result<()> {
         })
         .map(|reps| closed_client(args.clone(), reps))
         .collect::<Vec<_>>();
-    let start = tokio::time::Instant::now();
     futures::future::join_all(runners)
         .await
         .into_iter()
@@ -101,12 +112,12 @@ async fn run_bursty(args: Args) -> anyhow::Result<()> {
         msg: vec![42u8; args.message_size].into(),
     };
 
+    let start = tokio::time::Instant::now();
     let futs = (0..args.reps)
         .into_iter()
         .map(|_| do_run(client.clone(), tonic::Request::new(request.clone())))
         .collect::<Vec<_>>();
 
-    let start = tokio::time::Instant::now();
     futures::future::join_all(futs)
         .await
         .into_iter()
@@ -177,5 +188,12 @@ fn main() -> anyhow::Result<()> {
             .unwrap()
     };
 
+    if let Some(start) = args.start {
+        let now_ts = Local::now().timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        let start_ts = start.timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
+        if now_ts < start_ts {
+            std::thread::sleep(std::time::Duration::from_nanos((start_ts - now_ts) as u64));
+        }
+    }
     rt.block_on(run(args))
 }

@@ -1,11 +1,13 @@
 #!/usr/bin/env python
 
 import click
+import datetime
 import humanfriendly
 import logging
+import multiprocessing
+import pause
 import socket
 import time
-import multiprocessing
 
 BUCKET_SIZE = 2 ** 15
 BUCKET = b'\x42' * BUCKET_SIZE
@@ -70,14 +72,14 @@ def run_worker(host, port, message_size, reps):
               show_default=True,
               type=click.STRING,
               help="message size in B")
+@click.option("--start",
+              type=click.DateTime(formats=["%H:%M:%S"]),
+              default=datetime.datetime.fromtimestamp(time.time()).strftime('%H:%M:%S'))
 @click.option("--verbose", '-v', is_flag=True, type=click.BOOL, default=False)
-def client(host, port, n_cores, reps, message_size, verbose):
+def client(host, port, n_cores, reps, message_size, start, verbose):
     message_size = humanfriendly.parse_size(message_size, binary=True)
-
-    if verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        logging.getLogger().setLevel(logging.INFO)
+    today = datetime.date.today()
+    start = start.replace(year=today.year, month=today.month, day=today.day)
 
     workers = [
         multiprocessing.Process(
@@ -89,6 +91,7 @@ def client(host, port, n_cores, reps, message_size, verbose):
                 host, port, message_size, reps // n_cores + reps %
                 n_cores))]
 
+    pause.until(start)
     start_time = time.perf_counter()
     for w in workers:
         w.start()
