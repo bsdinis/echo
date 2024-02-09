@@ -18,10 +18,13 @@ The client should support the following CLI options:
 - `[hostname]`: hostname to connect to
 - `[port]`: port to connect to
 - `-j`, `--n-cores`: integer, number of cores to use for concurrency (default: number of cores in the machine)
-- `-r`, `--reps`: integer, number of requests to send in total (default: 1000)
-- `-s`, `--message-size`: size of the message to send (parseable, like `1MB` or `256KiB`)
+- `-d`, `--duration`: duration of the experiment
+- `-w`, `--warmup`: duration of the warmup cycle
+- `-s`, `--start`: start instatnt
+- `-m`, `--message-size`: size of the message to send (parseable, like `1MB` or `256KiB`)
 
 ## Output
 
-The clients should output a list of latencies in microseconds.
-Moreover, there should be a line with `Elapsed: X.Y`, in seconds and a line with `Message Size: Z`, in bytes.
+The clients SHALL output a list of latencies in microseconds.
+There MUST be at least one line with `Messagte Size: Z`, in bytes. In the event there are multiple such lines, they should be identical.
+Each client will output a `Start: <ID> A.B` and an `End: <ID> X.Y`, such that `X.Y - A.B` will give the elapsed time in seconds. In the event of multiple `Start`s and `End`s per `<ID>`, the considered `Start` will be the minimum value and the considered `End` the maximum value.

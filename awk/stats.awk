@@ -1,18 +1,62 @@
 #!/usr/bin/awk -f
 
+function compute_avg_elapsed(start_p, end_p) {
+    elapsed_count = 0
+    elapsed_sum = 0
+    for (id in start_p) {
+        if (id in end_p) {
+            elapsed_sum += end_p[id] - start_p[id]
+            elapsed_count += 1
+        }
+    }
+
+    return elapsed_sum / elapsed_count
+}
+
+function n_clients(start_p, end_p) {
+    count = 0
+    for (id in start_p) {
+        if (id in end_p) {
+            count += 1
+        }
+    }
+
+    return count
+}
+
 BEGIN {
     n_transfers=0
     sum_transfers=0
     elapsed_sum=0
-    total_clients=0
 }
 
-/Elapsed/ {
-    elapsed_sum += $2
-    total_clients += 1
+/^Start:/ {
+    id = $2
+    ts = $3
+    if ( id in start ) {
+        if ( ts < start[id] ) {
+            start[id] = ts
+        }
+    }
+    else {
+        start[id] = ts
+    }
 }
 
-/Message Size/ {
+/^End:/ {
+    id = $2
+    ts = $3
+    if ( id in end ) {
+        if ( ts > end[id] ) {
+            end[id] = ts
+        }
+    }
+    else {
+        end[id] = ts
+    }
+}
+
+/^Message Size:/ {
     # TODO: check that message sizes are consistent
     message_size=$3
 }
@@ -47,14 +91,15 @@ END {
 
     stddev = sqrt(variance)
 
-    # we average the elapsed times
-    # TODO: handle warmup and cooldown
-    elapsed = elapsed_sum / total_clients
+    elapsed = compute_avg_elapsed(start, end)
+    n_cli = n_clients(start, end)
 
-    printf "N:          %d\n", n_transfers
-    printf "Min:        %.3f us\n", min_transfer
-    printf "Average:    %.3f us\n", average
-    printf "Stddev:     %.3f us\n", stddev
-    printf "Max:        %.3f us\n", max_transfer
-    printf "Throughput: %.3f B/s\n", (n_transfers * message_size) / elapsed
+    printf "#Transfers:  %d\n", n_transfers
+    printf "Min:         %.3f us\n", min_transfer
+    printf "Average:     %.3f us\n", average
+    printf "Stddev:      %.3f us\n", stddev
+    printf "Max:         %.3f us\n", max_transfer
+    printf "Throughput:  %.3f B/s\n", (n_transfers * message_size) / elapsed
+    printf "Elapsed Avg: %.9f s\n", elapsed
+    printf "#Clients:    %d\n", n_cli
 }

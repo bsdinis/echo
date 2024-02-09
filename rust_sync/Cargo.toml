@@ -16,7 +16,10 @@ anyhow = "1.0"
 chrono = "0.4.33"
 clap = { version = "4.4.12", features = ["derive"] }
 futures = "0.3.30"
+gethostname = "0.4.3"
+humantime = "2.1.0"
 num_cpus = "1.16.0"
 parse-size = "1.0.0"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = [ "std", "env-filter" ] }
+uuid = { version = "1.7.0", features = ["v4"] }

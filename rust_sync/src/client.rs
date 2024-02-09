@@ -1,6 +1,6 @@
 use std::io::{Read, Write};
 use std::net::TcpStream;
-use std::thread;
+use std::time::Duration;
 
 use anyhow::Context;
 use chrono::{Local, NaiveDateTime, NaiveTime};
@@ -23,7 +23,13 @@ fn time_parser(s: &str) -> anyhow::Result<NaiveDateTime> {
     Ok(NaiveDateTime::new(today, time))
 }
 
-#[derive(Parser, Clone)]
+fn duration_parser(s: &str) -> anyhow::Result<u64> {
+    humantime::parse_duration(s)
+        .map(|s| s.as_secs())
+        .context("failed to parse duration")
+}
+
+#[derive(Parser, Clone, Debug)]
 #[command(author, version, about, long_about=None)]
 struct Args {
     #[arg(default_value = "[::1]")]
@@ -35,17 +41,29 @@ struct Args {
     #[arg(short = 'j', long)]
     n_cores: Option<usize>,
 
-    #[arg(short, long, default_value_t = 1000)]
-    reps: usize,
+    #[arg(short, long, default_value = "60s", value_parser = duration_parser)]
+    duration: u64,
 
-    #[arg(short = 's', long, default_value_t = 1, value_parser = size_parser)]
+    #[arg(short, long, default_value = "10s", value_parser = duration_parser)]
+    warmup: u64,
+
+    #[arg(short, long, default_value_t = 1, value_parser = size_parser)]
     message_size: usize,
 
-    #[arg(long, value_parser = time_parser)]
+    #[arg(short, long, value_parser = time_parser)]
     start: Option<NaiveDateTime>,
 }
 
-fn do_run(stream: &mut TcpStream, message_size: usize) -> anyhow::Result<()> {
+impl Args {
+    fn duration(&self) -> std::time::Duration {
+        return Duration::from_secs(self.duration);
+    }
+    fn warmup(&self) -> std::time::Duration {
+        return Duration::from_secs(self.warmup);
+    }
+}
+
+fn do_run(stream: &mut TcpStream, message_size: usize) -> anyhow::Result<Duration> {
     let mut buffer = [42; BUFFER_SIZE];
     let start = std::time::Instant::now();
     let mut need_to_write = message_size;
@@ -62,18 +80,28 @@ fn do_run(stream: &mut TcpStream, message_size: usize) -> anyhow::Result<()> {
         }
         waiting_for -= n;
     }
-    println!("{:.3}", start.elapsed().as_secs_f64() * 1_000_000f64);
-    Ok(())
+    Ok(start.elapsed())
 }
 
-fn closed_client(args: Args, reps: usize) -> anyhow::Result<()> {
+fn closed_client(id: &str, args: &Args) -> anyhow::Result<()> {
     match TcpStream::connect(format!("{}:{}", args.host, args.port)) {
         Ok(mut stream) => {
+            let mut reporting = false;
             let size = args.message_size.to_be_bytes();
             stream.write_all(&size)?;
-            for _ in 0..reps {
-                do_run(&mut stream, args.message_size)?
+            let start = std::time::Instant::now();
+            while start.elapsed() < args.duration() + args.warmup() {
+                let elapsed = do_run(&mut stream, args.message_size)?;
+                if !reporting && start.elapsed() > args.warmup() {
+                    reporting = true;
+                    println!("Start: {} {:.9}", id, start.elapsed().as_secs_f64());
+                }
+
+                if reporting && start.elapsed() < args.duration() + args.warmup() {
+                    println!("{:.3}", elapsed.as_secs_f64() * 1_000_000f64);
+                }
             }
+            println!("End: {} {:.9}", id, start.elapsed().as_secs_f64());
         }
         Err(e) => {
             return Err(e).context("failed to connect");
@@ -91,7 +119,15 @@ fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let paralellism = args.n_cores.unwrap_or_else(|| num_cpus::get());
+    let id = format!(
+        "{}:{:x}",
+        gethostname::gethostname()
+            .into_string()
+            .map_err(|os_str| anyhow::anyhow!("failed to convert hostname: {:?}", os_str))?,
+        uuid::Uuid::new_v4().simple()
+    );
 
+    println!("Message Size: {}", args.message_size);
     if let Some(start) = args.start {
         let now_ts = Local::now().timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
         let start_ts = start.timestamp_nanos_opt().ok_or(anyhow::anyhow!("an i64 can represent stuff until 2262. if you are still using this code in 2262 first of all, thanks i guess; second, i don't really care, probably fix this"))?;
@@ -100,34 +136,22 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let start = std::time::Instant::now();
-    let runners = (0..paralellism)
-        .into_iter()
-        .map(|idx| {
-            if idx == 0 {
-                args.reps / paralellism + args.reps % paralellism
-            } else {
-                args.reps / paralellism
-            }
-        })
-        .map(|reps| (args.clone(), reps))
-        .map(|(args, reps)| thread::spawn(move || closed_client(args, reps)))
-        .collect::<Vec<_>>();
+    std::thread::scope(|s| {
+        let runners = (0..paralellism)
+            .into_iter()
+            .map(|_| s.spawn(|| closed_client(&id, &args)))
+            .collect::<Vec<_>>();
 
-    runners
-        .into_iter()
-        .filter_map(|x| match x.join() {
-            Ok(ok) => Some(ok),
-            Err(e) => {
-                tracing::warn!("join error: {:?}", e);
-                None
-            }
-        })
-        .collect::<anyhow::Result<_>>()?;
-    let elapsed = start.elapsed();
-
-    println!("Elapsed: {:.9}", elapsed.as_secs_f64());
-    println!("Message Size: {}", args.message_size);
-
-    Ok(())
+        runners
+            .into_iter()
+            .filter_map(|x| match x.join() {
+                Ok(ok) => Some(ok),
+                Err(e) => {
+                    tracing::warn!("join error: {:?}", e);
+                    None
+                }
+            })
+            .collect::<anyhow::Result<_>>()?;
+        Ok::<(), anyhow::Error>(())
+    })
 }
