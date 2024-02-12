@@ -1,5 +1,9 @@
 #!/usr/bin/awk -f
 
+function ceil(v) {
+  return (v == int(v)) ? v : int(v)+1
+}
+
 function compute_avg_elapsed(start_p, end_p) {
     elapsed_count = 0
     elapsed_sum = 0
@@ -22,6 +26,10 @@ function n_clients(start_p, end_p) {
     }
 
     return count
+}
+
+function percentile(k, arr, len) {
+    return arr[ceil((k / 100) * len)]
 }
 
 BEGIN {
@@ -94,10 +102,18 @@ END {
     elapsed = compute_avg_elapsed(start, end)
     n_cli = n_clients(start, end)
 
+    asort(vals)
+    p90 = percentile(90, vals, n_transfers)
+    p95 = percentile(95, vals, n_transfers)
+    p99 = percentile(99, vals, n_transfers)
+
     printf "#Transfers:  %d\n", n_transfers
     printf "Min:         %.3f us\n", min_transfer
     printf "Average:     %.3f us\n", average
     printf "Stddev:      %.3f us\n", stddev
+    printf "P90:         %.3f us\n", p90
+    printf "P95:         %.3f us\n", p95
+    printf "P99:         %.3f us\n", p99
     printf "Max:         %.3f us\n", max_transfer
     printf "Throughput:  %.3f B/s\n", (n_transfers * message_size) / elapsed
     printf "Elapsed Avg: %.9f s\n", elapsed

@@ -1,0 +1,11 @@
+#Transfers:  787232
+Min:         351.448 us
+Average:     7638.189 us
+Stddev:      82927.654 us
+P90:         5014.792 us
+P95:         5620.617 us
+P99:         213152.033 us
+Max:         843262.624 us
+Throughput:  53813760.846 B/s
+Elapsed Avg: 59.919660350 s
+#Clients:    5

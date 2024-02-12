@@ -1,8 +1,12 @@
+use std::net::{SocketAddr, ToSocketAddrs};
+
 use echo::echoer_server::{Echoer, EchoerServer};
 use echo::{EchoReply, EchoRequest};
 
 use clap::Parser;
 use tonic::{transport::Server, Request, Response, Status};
+
+use anyhow::Context;
 
 pub mod echo {
     tonic::include_proto!("echo");
@@ -42,8 +46,12 @@ impl Echoer for MyEchoer {
     }
 }
 
-async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
-    let addr = format!("{}:{}", args.host, args.port).parse()?;
+async fn run(args: Args) -> anyhow::Result<()> {
+    let addr: SocketAddr = (args.host.as_str(), args.port)
+        .to_socket_addrs()
+        .context("failed to parse")?
+        .next()
+        .ok_or_else(|| anyhow::anyhow!("no socket addrs"))?;
     let echoer = MyEchoer::default();
 
     tracing::info!("preparing to serve @ {}:{}", args.host, args.port);
@@ -55,10 +63,8 @@ async fn run(args: Args) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt()
-        .with_writer(std::io::stderr)
-        .finish();
+fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt::init();
     let args = Args::parse();
 
     let rt = if let Some(n_cores) = args.n_cores {
